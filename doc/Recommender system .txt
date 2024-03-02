@@ -1,0 +1,5 @@
+Recommender system 
+
+Dataset - Amazon Review Dataset - Sports and Outdoors Dataset
+
+The GAN creates more fake reviews based on a specific user. As for those products that the user haven't reviewed or rated there will be the fake reviews. 

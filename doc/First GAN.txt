@@ -1,0 +1,212 @@
+The architecture of Generative Adversarial Networks
+
+Composed of two neural networks
+	Generator - Estimate the probability distribution of the real samples in order to provide generated samples resembling real data.
+	Discriminator - Is trained to estimate the probability that a given sample came from real data rathern than being provided by the generator.
+	
+Generator tries to get better at fooling the discriminator, while the discriminator tries to get better at identifying generated samples.
+	 
+# Running the First GAN
+
+PyTorch library
+
+CODE
+
+import torch
+from torch import nn
+
+import math
+import matplotlib.pyplot as plt
+
+	Importing PyTorch and nn (to set up the neural networks in a less verbose way)
+
+torch.manual_seed(111)
+	
+	A random generator seed so that the experiment can be replicated identically on any machine.
+	
+PREPARING THE TRAINING DATA
+
+train_data_length = 1024
+train_data = torch.zeros((train_data_length, 2))
+train_data[:, 0] = 2 * math.pi * torch.rand(train_data_length)
+train_data[:, 1] = torch.sin(train_data[:, 0])
+train_labels = torch.zeros(train_data_length)
+train_set = [
+    (train_data[i], train_labels[i]) for i in range(train_data_length)
+]
+
+		*
+		 line 1: compose a training set with 1024 pairs (X1, X2)
+		 line 2: Initialising train_data, a tensor with dimensions of 1024 rows and 2 columns, all containing zeros.
+		 line 3: Use the first column of train_data to store random values in the interval from 0 to 2π
+		 line 4: Calculate the second column of the tensor as the sine of the first column.
+		 line 5: Create train_labels, a tensor filled with zeros.
+		 line 6 - 8: Create train_set as a list of tuples, with each row of train_data and train_labels represented
+					 in each tuple as expected by PyTorch's data loader.
+
+plt.plot(train_data[:, 0], train_data[:, 1], ".")
+
+	Examining the training data
+	
+batch_size = 32
+train_loader = torch.utils.data.DataLoader(
+    train_set, batch_size=batch_size, shuffle=True
+)
+
+	create a data loader called train_loader, which will shuffle the data from train_set and return batches of 
+	32 samples that you’ll use to train the neural networks.
+	
+IMPLEMENTING THE DISCRIMINATOR
+
+class Discriminator(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.model = nn.Sequential(
+            nn.Linear(2, 256),
+            nn.ReLU(),
+            nn.Dropout(0.3),
+            nn.Linear(256, 128),
+            nn.ReLU(),
+            nn.Dropout(0.3),
+            nn.Linear(128, 64),
+            nn.ReLU(),
+            nn.Dropout(0.3),
+            nn.Linear(64, 1),
+            nn.Sigmoid(),
+        )
+
+    def forward(self, x):
+        output = self.model(x)
+        return output
+		
+		line 1: class named Discriminator that inherits from the nn.Module class.
+				By doing this, you create a custom PyTorch model.
+		line 2: Constructor method
+		line 3: Calling the constructor of the parent class ('nn.module') to initialise the 'Discriminator'
+		line 4: Defines the model architecture.
+		line 5 & 6: The input is two-dimensional, and the first hidden layer is composed of 256 neurons with ReLU activation.
+		line 8,9,11, & 12: The second and third hidden layers are composed of 128 and 64 neurons, respectively, with ReLU activation.
+		line 14 & 15: The output is composed of a single neuron with sigmoidal activation to represent a probability.
+		line 7,10 & 13: After the first, second, and third hidden layers, you use dropout to avoid overfitting.
+		
+			*Sigmoid: Used to squash the output into the range [0,1] making it suitable for binary classification. The sigmoid function
+			converts the discriminator's output into a probability score, where values closer to 1 indicate real data, and values closer 
+			to 0 indicate fake data.
+			
+		line 18 - 20: To describe how the output of the model is calculated. 
+					  x represents the input of the model, which is a two-dimensional tensor.
+					  
+discriminator = Discriminator()
+	
+		An instance of the neural network and ready to be trained.
+		
+		
+IMPLEMENTING THE GENERATOR
+
+class Generator(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.model = nn.Sequential(
+            nn.Linear(2, 16),
+            nn.ReLU(),
+            nn.Linear(16, 32),
+            nn.ReLU(),
+            nn.Linear(32, 2),
+        )
+
+    def forward(self, x):
+        output = self.model(x)
+        return output
+
+generator = Generator()
+
+		It’s composed of two hidden layers with 16 and 32 neurons, both with ReLU activation, and a linear activation layer with 2 neurons
+		in the output.
+		
+TRAINING THE MODELS
+
+lr = 0.001
+num_epochs = 300
+loss_function = nn.BCELoss()
+		
+		
+		line 1: set the learning rate, to use to adapt the network weights.
+		line 2: sets the number of epochs, defines how many repetitions of training using the whole training set will be performed.
+		line 3: Binary Cross-Entropy Loss quantifies the dissimilarity between the predicted probability distribution and the actual 
+				target labels. It is commonly used when the final layer of the neural network uses a sigmoid activation function,
+				which is typical in binary classification scenarios.
+				
+optimizer_discriminator = torch.optim.Adam(discriminator.parameters(), lr=lr)
+optimizer_generator = torch.optim.Adam(generator.parameters(), lr=lr)
+
+
+for epoch in range(num_epochs):
+    for n, (real_samples, _) in enumerate(train_loader):
+        # Data for training the discriminator
+        real_samples_labels = torch.ones((batch_size, 1))
+        latent_space_samples = torch.randn((batch_size, 2))
+        generated_samples = generator(latent_space_samples)
+        generated_samples_labels = torch.zeros((batch_size, 1))
+        all_samples = torch.cat((real_samples, generated_samples))
+        all_samples_labels = torch.cat(
+            (real_samples_labels, generated_samples_labels)
+        )
+
+        # Training the discriminator
+        discriminator.zero_grad()
+        output_discriminator = discriminator(all_samples)
+        loss_discriminator = loss_function(
+            output_discriminator, all_samples_labels)
+        loss_discriminator.backward()
+        optimizer_discriminator.step()
+
+        # Data for training the generator
+        latent_space_samples = torch.randn((batch_size, 2))
+
+        # Training the generator
+        generator.zero_grad()
+        generated_samples = generator(latent_space_samples)
+        output_discriminator_generated = discriminator(generated_samples)
+        loss_generator = loss_function(
+            output_discriminator_generated, real_samples_labels
+        )
+        loss_generator.backward()
+        optimizer_generator.step()
+
+        # Show loss
+        if epoch % 10 == 0 and n == batch_size - 1:
+            print(f"Epoch: {epoch} Loss D.: {loss_discriminator}")
+            print(f"Epoch: {epoch} Loss G.: {loss_generator}")
+			
+			
+		Line 1: Initiates a loop
+		Line 2: this nested loop iterates through batches of real data samples from the training dataset. It also uses enumerate
+				to keep track of the batch number and retrieve real data samples (real_samples).
+		Line 3: Create label tensors for the real data samples. Real samples are labeled as 1 (indicating real data)
+		Line 4: Generates random noise samples.
+		Line 5: Generator model is called with the random noise samples.
+		Line 6: Create label tensors for the generated data samples. Generated samples are labeled as 0 (indicating fake data).
+		Line 7 - 9: These lines concatenate the real data samples and generated data samples, as well as their corresponding labels,
+					into two tensors: all_samples and all_samples_labels. 
+		Line 10: Zeroing the gradients (discriminator.zero_grad()) to reset the gradient accumulation from the previous batch.
+		Line 11 - 13: Calculating the loss using the Binary Cross-Entropy Loss (loss_function) by comparing the discriminator's predictions
+				(output_discriminator) with the true labels (all_samples_labels).
+		Line 14: Backpropagating the gradients (loss_discriminator.backward()) through the discriminator's layers
+		Line 15: Applying the optimization step (optimizer_discriminator.step()) to update the discriminator's parameters using the computed gradients.
+		Line 16: Zeroing the gradients (generator.zero_grad()).
+		Line 17: Generating a new batch of fake samples using random noise
+		Line 18: Forward pass through the discriminator for the generated samples (output_discriminator_generated = discriminator(generated_samples)).
+		Line 19 - 21: Calculating the generator loss by comparing the discriminator's predictions for the generated samples with the labels for real data (loss_generator).
+		Line 22: Backpropagating the gradients (loss_generator.backward()) through the generator's layers.
+		Line 23: Applying the optimization step (optimizer_generator.step()) to update the generator's parameters using the computed gradients.
+		Line 24 - 26: Prints out the current values of the discriminator and generator losses.
+		
+		CHECKING THE SAMPLES GENERATED BY THE GAN
+		
+latent_space_samples = torch.randn(100, 2)
+generated_samples = generator(latent_space_samples)
+generated_samples = generated_samples.detach()
+plt.plot(generated_samples[:, 0], generated_samples[:, 1], ".")
+
+
+			
