@@ -170,3 +170,5 @@ src/MNIST/raw/train-images-idx3-ubyte
 src/MNIST/raw/train-images-idx3-ubyte.gz
 src/MNIST/raw/train-labels-idx1-ubyte
 src/MNIST/raw/train-labels-idx1-ubyte.gz
+data/1000.csv
+data/Video_Games_meta.csv
